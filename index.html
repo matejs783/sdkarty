@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sledování SD karet — autokamera</title>
+<style>
+  :root{
+    --bg1:#0f172a;
+    --bg2:#1e293b;
+    --card:#1e293b;
+    --card-border:#334155;
+    --text:#e2e8f0;
+    --muted:#94a3b8;
+    --accent-small:#38bdf8;
+    --accent-large:#a78bfa;
+    --good:#22c55e;
+    --warn:#f59e0b;
+    --bad:#ef4444;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+    background: radial-gradient(circle at 20% 20%, #1e293b 0%, #0f172a 60%, #020617 100%);
+    color:var(--text);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:40px 20px 60px;
+  }
+  h1{
+    font-size:1.6rem;
+    font-weight:600;
+    margin-bottom:6px;
+    text-align:center;
+  }
+  p.subtitle{
+    color:var(--muted);
+    margin-top:0;
+    margin-bottom:36px;
+    text-align:center;
+    font-size:0.95rem;
+  }
+  .cards{
+    display:flex;
+    gap:24px;
+    flex-wrap:wrap;
+    justify-content:center;
+    width:100%;
+    max-width:760px;
+  }
+  .card{
+    flex:1 1 320px;
+    background:linear-gradient(160deg, var(--card), #15203399);
+    border:1px solid var(--card-border);
+    border-radius:18px;
+    padding:28px 24px;
+    box-shadow:0 10px 30px -10px rgba(0,0,0,0.5);
+    position:relative;
+    overflow:hidden;
+    transition:transform .2s ease, box-shadow .2s ease;
+  }
+  .card:hover{
+    transform:translateY(-4px);
+    box-shadow:0 16px 40px -10px rgba(0,0,0,0.6);
+  }
+  .card::before{
+    content:"";
+    position:absolute;
+    top:-40%;
+    right:-40%;
+    width:200px;
+    height:200px;
+    border-radius:50%;
+    opacity:0.15;
+    filter:blur(10px);
+  }
+  .card.small::before{ background:var(--accent-small); }
+  .card.large::before{ background:var(--accent-large); }
+
+  .card h2{
+    margin:0 0 4px;
+    font-size:1.25rem;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .card .limit{
+    color:var(--muted);
+    font-size:0.85rem;
+    margin-bottom:20px;
+  }
+
+  .days-display{
+    font-size:3.2rem;
+    font-weight:700;
+    line-height:1;
+    margin-bottom:4px;
+  }
+  .days-label{
+    color:var(--muted);
+    font-size:0.9rem;
+    margin-bottom:18px;
+  }
+
+  .progress-track{
+    width:100%;
+    height:8px;
+    background:#0f172a;
+    border-radius:999px;
+    overflow:hidden;
+    margin-bottom:8px;
+    border:1px solid #334155;
+  }
+  .progress-fill{
+    height:100%;
+    border-radius:999px;
+    transition:width .4s ease, background .4s ease;
+  }
+
+  .status-text{
+    font-size:0.85rem;
+    margin-bottom:20px;
+    font-weight:600;
+  }
+  .status-text.good{ color:var(--good); }
+  .status-text.warn{ color:var(--warn); }
+  .status-text.bad{ color:var(--bad); }
+  .status-text.idle{ color:var(--muted); font-weight:400; }
+
+  button.reset-btn{
+    width:100%;
+    padding:13px 18px;
+    border:none;
+    border-radius:12px;
+    font-size:0.95rem;
+    font-weight:600;
+    cursor:pointer;
+    color:#0f172a;
+    transition:filter .15s ease, transform .1s ease;
+  }
+  button.reset-btn:active{
+    transform:scale(0.97);
+  }
+  .card.small button.reset-btn{ background:var(--accent-small); }
+  .card.large button.reset-btn{ background:var(--accent-large); }
+  button.reset-btn:hover{ filter:brightness(1.1); }
+
+  .since-date{
+    margin-top:14px;
+    font-size:0.78rem;
+    color:var(--muted);
+    text-align:center;
+  }
+
+  footer{
+    margin-top:40px;
+    color:var(--muted);
+    font-size:0.78rem;
+    text-align:center;
+    max-width:500px;
+  }
+</style>
+</head>
+<body>
+
+  <h1>📹 SD karty v autokameře</h1>
+  <p class="subtitle">Sleduj, jak dlouho je která karta vložená v kameře</p>
+
+  <div class="cards">
+
+    <div class="card small">
+      <h2>💾 Malá karta</h2>
+      <div class="limit">Kapacita na cca <strong>6 dní</strong> záznamu</div>
+
+      <div class="days-display" id="small-days">–</div>
+      <div class="days-label">dní ve kameře</div>
+
+      <div class="progress-track">
+        <div class="progress-fill" id="small-progress" style="width:0%; background:var(--accent-small);"></div>
+      </div>
+      <div class="status-text idle" id="small-status">Zatím nespuštěno</div>
+
+      <button class="reset-btn" onclick="resetCounter('small')">Vložil jsem kartu — vynulovat</button>
+      <div class="since-date" id="small-since"></div>
+    </div>
+
+    <div class="card large">
+      <h2>💽 Velká karta</h2>
+      <div class="limit">Kapacita na cca <strong>12 dní</strong> záznamu</div>
+
+      <div class="days-display" id="large-days">–</div>
+      <div class="days-label">dní ve kameře</div>
+
+      <div class="progress-track">
+        <div class="progress-fill" id="large-progress" style="width:0%; background:var(--accent-large);"></div>
+      </div>
+      <div class="status-text idle" id="large-status">Zatím nespuštěno</div>
+
+      <button class="reset-btn" onclick="resetCounter('large')">Vložil jsem kartu — vynulovat</button>
+      <div class="since-date" id="large-since"></div>
+    </div>
+
+  </div>
+
+  <footer>
+    Data se ukládají lokálně v tomto prohlížeči (localStorage). Tlačítko stiskni vždy, když kartu vložíš do kamery — počítadlo se vynuluje a začne počítat dny znovu.
+  </footer>
+
+<script>
+  const LIMITS = { small: 6, large: 12 };
+
+  function loadStart(type){
+    const v = localStorage.getItem('sdcard_' + type + '_start');
+    return v ? parseInt(v, 10) : null;
+  }
+
+  function saveStart(type, timestamp){
+    localStorage.setItem('sdcard_' + type + '_start', timestamp);
+  }
+
+  function resetCounter(type){
+    const now = Date.now();
+    saveStart(type, now);
+    render(type);
+  }
+
+  function formatDate(ts){
+    const d = new Date(ts);
+    return d.toLocaleDateString('cs-CZ', { day:'numeric', month:'long', year:'numeric' }) +
+           ' v ' + d.toLocaleTimeString('cs-CZ', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  function render(type){
+    const start = loadStart(type);
+    const daysEl = document.getElementById(type + '-days');
+    const statusEl = document.getElementById(type + '-status');
+    const progressEl = document.getElementById(type + '-progress');
+    const sinceEl = document.getElementById(type + '-since');
+    const limit = LIMITS[type];
+
+    if(!start){
+      daysEl.textContent = '–';
+      statusEl.textContent = 'Zatím nespuštěno';
+      statusEl.className = 'status-text idle';
+      progressEl.style.width = '0%';
+      sinceEl.textContent = '';
+      return;
+    }
+
+    const diffMs = Date.now() - start;
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    const fullDays = Math.floor(diffDays);
+
+    daysEl.textContent = fullDays;
+    sinceEl.textContent = 'Vloženo: ' + formatDate(start);
+
+    const ratio = Math.min(diffDays / limit, 1.3);
+    progressEl.style.width = Math.min(ratio * 100, 100) + '%';
+
+    let statusClass, statusText, barColor;
+    const accent = type === 'small' ? 'var(--accent-small)' : 'var(--accent-large)';
+
+    if(diffDays < limit * 0.7){
+      statusClass = 'good';
+      statusText = '✓ V pořádku, ještě je místo';
+      barColor = accent;
+    } else if(diffDays < limit){
+      statusClass = 'warn';
+      statusText = '⚠ Blíží se konec kapacity (~' + limit + ' dní)';
+      barColor = 'var(--warn)';
+    } else {
+      statusClass = 'bad';
+      const over = fullDays - limit;
+      statusText = '⛔ Kapacita pravděpodobně překročena' + (over > 0 ? ' (o ' + over + ' dní)' : '');
+      barColor = 'var(--bad)';
+    }
+
+    statusEl.textContent = statusText;
+    statusEl.className = 'status-text ' + statusClass;
+    progressEl.style.background = barColor;
+  }
+
+  function renderAll(){
+    render('small');
+    render('large');
+  }
+
+  renderAll();
+  setInterval(renderAll, 60 * 1000); // aktualizace každou minutu
+</script>
+
+</body>
+</html>
