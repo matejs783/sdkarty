@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sledování SD karet — autokamera</title>
+<title>Odpočty — SD karty, vajíčka, maso</title>
 <style>
   :root{
     --bg1:#0f172a;
@@ -14,6 +14,8 @@
     --muted:#94a3b8;
     --accent-small:#38bdf8;
     --accent-large:#a78bfa;
+    --accent-eggs:#fcd34d;
+    --accent-meat:#f472b6;
     --good:#22c55e;
     --warn:#f59e0b;
     --bad:#ef4444;
@@ -79,6 +81,8 @@
   }
   .card.small::before{ background:var(--accent-small); }
   .card.large::before{ background:var(--accent-large); }
+  .card.eggs::before{ background:var(--accent-eggs); }
+  .card.meat::before{ background:var(--accent-meat); }
 
   .card h2{
     margin:0 0 4px;
@@ -146,6 +150,8 @@
   }
   .card.small button.reset-btn{ background:var(--accent-small); }
   .card.large button.reset-btn{ background:var(--accent-large); }
+  .card.eggs button.reset-btn{ background:var(--accent-eggs); }
+  .card.meat button.reset-btn{ background:var(--accent-meat); }
   button.reset-btn:hover{ filter:brightness(1.1); }
 
   .since-date{
@@ -166,66 +172,92 @@
 </head>
 <body>
 
-  <h1>📹 SD karty v autokameře</h1>
-  <p class="subtitle">Sleduj, jak dlouho je která karta vložená v kameře</p>
+  <h1>⏱️ Odpočty</h1>
+  <p class="subtitle">SD karty v autokameře, vajíčka a maso — kolik dní už uběhlo</p>
 
-  <div class="cards">
+  <div class="cards" id="cards"></div>
 
-    <div class="card small">
-      <h2>💾 Malá karta</h2>
-      <div class="limit">Kapacita na cca <strong>6 dní</strong> záznamu</div>
-
-      <div class="days-display" id="small-days">–</div>
-      <div class="days-label">dní ve kameře</div>
-
-      <div class="progress-track">
-        <div class="progress-fill" id="small-progress" style="width:0%; background:var(--accent-small);"></div>
-      </div>
-      <div class="status-text idle" id="small-status">Zatím nespuštěno</div>
-
-      <button class="reset-btn" onclick="resetCounter('small')">Vložil jsem kartu — vynulovat</button>
-      <div class="since-date" id="small-since"></div>
-    </div>
-
-    <div class="card large">
-      <h2>💽 Velká karta</h2>
-      <div class="limit">Kapacita na cca <strong>12 dní</strong> záznamu</div>
-
-      <div class="days-display" id="large-days">–</div>
-      <div class="days-label">dní ve kameře</div>
-
-      <div class="progress-track">
-        <div class="progress-fill" id="large-progress" style="width:0%; background:var(--accent-large);"></div>
-      </div>
-      <div class="status-text idle" id="large-status">Zatím nespuštěno</div>
-
-      <button class="reset-btn" onclick="resetCounter('large')">Vložil jsem kartu — vynulovat</button>
-      <div class="since-date" id="large-since"></div>
-    </div>
-
-  </div>
+  <div class="since-date" id="sync-status" style="margin-top:24px;">☁️ Připojuji…</div>
 
   <footer>
-    Data se ukládají lokálně v tomto prohlížeči (localStorage). Tlačítko stiskni vždy, když kartu vložíš do kamery — počítadlo se vynuluje a začne počítat dny znovu.
+    Data se synchronizují přes Firebase Firestore mezi všemi zařízeními (záloha v localStorage). Tlačítko stiskni vždy, když kartu vložíš do kamery nebo koupíš čerstvé vajíčka či maso — počítadlo se vynuluje a začne počítat dny znovu.
   </footer>
 
-<script>
-  const LIMITS = { small: 6, large: 12 };
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-  function loadStart(type){
-    const v = localStorage.getItem('sdcard_' + type + '_start');
-    return v ? parseInt(v, 10) : null;
+  const firebaseConfig = {
+    apiKey: "AIzaSyAkbeGxNJkxJcrf-yP13S64KB8z8jNoudM",
+    authDomain: "odpocty-html.firebaseapp.com",
+    projectId: "odpocty-html",
+    storageBucket: "odpocty-html.firebasestorage.app",
+    messagingSenderId: "792358328218",
+    appId: "1:792358328218:web:95ce55db8df306d944cc23"
+  };
+  const db = getFirestore(initializeApp(firebaseConfig));
+  const stateRef = doc(db, "odpocty", "stav"); // jeden dokument: { small, large, eggs, meat } = časové značky v ms
+
+  // Úprav limity (ve dnech) podle potřeby
+  const ITEMS = [
+    { id:'small', icon:'💾', name:'Malá karta',  limit:6,  accent:'var(--accent-small)', unit:'dní ve kameře',
+      limitText:'Kapacita na cca <strong>6 dní</strong> záznamu', btn:'Vložil jsem kartu — vynulovat',
+      good:'✓ V pořádku, ještě je místo', warn:'⚠ Blíží se konec kapacity (~6 dní)', bad:'⛔ Kapacita pravděpodobně překročena', since:'Vloženo' },
+    { id:'large', icon:'💽', name:'Velká karta', limit:12, accent:'var(--accent-large)', unit:'dní ve kameře',
+      limitText:'Kapacita na cca <strong>12 dní</strong> záznamu', btn:'Vložil jsem kartu — vynulovat',
+      good:'✓ V pořádku, ještě je místo', warn:'⚠ Blíží se konec kapacity (~12 dní)', bad:'⛔ Kapacita pravděpodobně překročena', since:'Vloženo' },
+    { id:'eggs',  icon:'🥚', name:'Vajíčka',     limit:28, accent:'var(--accent-eggs)',  unit:'dní od nákupu',
+      limitText:'Doporučená spotřeba do cca <strong>28 dní</strong>', btn:'Koupil jsem vajíčka — vynulovat',
+      good:'✓ V pořádku, ještě jsou dobrá', warn:'⚠ Blíží se konec trvanlivosti (~28 dní)', bad:'⛔ Trvanlivost pravděpodobně překročena', since:'Koupeno' },
+    { id:'meat',  icon:'🥩', name:'Maso',        limit:3,  accent:'var(--accent-meat)',  unit:'dní od nákupu',
+      limitText:'Čerstvé maso v lednici cca <strong>3 dny</strong>', btn:'Koupil jsem maso — vynulovat',
+      good:'✓ Čerstvé, v pořádku', warn:'⚠ Brzy spotřebuj (~3 dny)', bad:'⛔ Trvanlivost pravděpodobně překročena', since:'Koupeno' }
+  ];
+  const BY_ID = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+
+  function buildCards(){
+    document.getElementById('cards').innerHTML = ITEMS.map(i => `
+    <div class="card ${i.id}">
+      <h2>${i.icon} ${i.name}</h2>
+      <div class="limit">${i.limitText}</div>
+
+      <div class="days-display" id="${i.id}-days">–</div>
+      <div class="days-label">${i.unit}</div>
+
+      <div class="progress-track">
+        <div class="progress-fill" id="${i.id}-progress" style="width:0%; background:${i.accent};"></div>
+      </div>
+      <div class="status-text idle" id="${i.id}-status">Zatím nespuštěno</div>
+
+      <button class="reset-btn" onclick="resetCounter('${i.id}')">${i.btn}</button>
+      <div class="since-date" id="${i.id}-since"></div>
+    </div>`).join('');
   }
 
-  function saveStart(type, timestamp){
-    localStorage.setItem('sdcard_' + type + '_start', timestamp);
+  // Stav v paměti; localStorage slouží jako rychlá záloha/cache
+  const state = {};
+  ITEMS.forEach(i => {
+    const v = localStorage.getItem('sdcard_' + i.id + '_start');
+    state[i.id] = v ? parseInt(v, 10) : null;
+  });
+
+  function setSync(text, ok){
+    const el = document.getElementById('sync-status');
+    el.textContent = text;
+    el.style.color = ok ? 'var(--good)' : 'var(--warn)';
   }
+
+  function loadStart(type){ return state[type]; }
 
   function resetCounter(type){
     const now = Date.now();
-    saveStart(type, now);
+    state[type] = now;
+    localStorage.setItem('sdcard_' + type + '_start', now);
     render(type);
+    setDoc(stateRef, { [type]: now }, { merge: true })
+      .catch(err => { console.error(err); setSync('⚠ Uložení do cloudu selhalo', false); });
   }
+  window.resetCounter = resetCounter;
 
   function formatDate(ts){
     const d = new Date(ts);
@@ -239,7 +271,8 @@
     const statusEl = document.getElementById(type + '-status');
     const progressEl = document.getElementById(type + '-progress');
     const sinceEl = document.getElementById(type + '-since');
-    const limit = LIMITS[type];
+    const item = BY_ID[type];
+    const limit = item.limit;
 
     if(!start){
       daysEl.textContent = '–';
@@ -255,26 +288,26 @@
     const fullDays = Math.floor(diffDays);
 
     daysEl.textContent = fullDays;
-    sinceEl.textContent = 'Vloženo: ' + formatDate(start);
+    sinceEl.textContent = item.since + ': ' + formatDate(start);
 
     const ratio = Math.min(diffDays / limit, 1.3);
     progressEl.style.width = Math.min(ratio * 100, 100) + '%';
 
     let statusClass, statusText, barColor;
-    const accent = type === 'small' ? 'var(--accent-small)' : 'var(--accent-large)';
+    const accent = item.accent;
 
     if(diffDays < limit * 0.7){
       statusClass = 'good';
-      statusText = '✓ V pořádku, ještě je místo';
+      statusText = item.good;
       barColor = accent;
     } else if(diffDays < limit){
       statusClass = 'warn';
-      statusText = '⚠ Blíží se konec kapacity (~' + limit + ' dní)';
+      statusText = item.warn;
       barColor = 'var(--warn)';
     } else {
       statusClass = 'bad';
       const over = fullDays - limit;
-      statusText = '⛔ Kapacita pravděpodobně překročena' + (over > 0 ? ' (o ' + over + ' dní)' : '');
+      statusText = item.bad + (over > 0 ? ' (o ' + over + ' dní)' : '');
       barColor = 'var(--bad)';
     }
 
@@ -284,11 +317,33 @@
   }
 
   function renderAll(){
-    render('small');
-    render('large');
+    ITEMS.forEach(i => render(i.id));
   }
 
+  buildCards();
   renderAll();
+
+  // Živá synchronizace s Firestore
+  let migrated = false;
+  onSnapshot(stateRef, snap => {
+    const remote = snap.exists() ? snap.data() : {};
+    const upload = {};
+    ITEMS.forEach(i => {
+      if (typeof remote[i.id] === 'number') {
+        state[i.id] = remote[i.id];
+        localStorage.setItem('sdcard_' + i.id + '_start', remote[i.id]);
+      } else if (!migrated && state[i.id]) {
+        upload[i.id] = state[i.id]; // jednorázový přenos starých dat z tohoto prohlížeče
+      }
+    });
+    migrated = true;
+    if (Object.keys(upload).length) setDoc(stateRef, upload, { merge: true }).catch(console.error);
+    renderAll();
+    setSync(snap.metadata.fromCache ? '☁️ Offline — změny se odešlou po připojení' : '☁️ Synchronizováno', !snap.metadata.fromCache);
+  }, err => {
+    console.error(err);
+    setSync('⚠ Cloud nedostupný (zkontroluj pravidla Firestore) — data jen lokálně', false);
+  });
   setInterval(renderAll, 60 * 1000); // aktualizace každou minutu
 </script>
 
