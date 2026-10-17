@@ -14,6 +14,7 @@ const res = await fetch(url);
 if (!res.ok) throw new Error("Firestore: " + res.status + " " + (await res.text()));
 const fields = (await res.json()).fields ?? {};
 
+const dny = n => (n === 1 ? "den" : n >= 2 && n <= 4 ? "dny" : "dní");
 const now = Date.now();
 for (const item of ITEMS) {
   const v = fields[item.id];
@@ -24,10 +25,14 @@ for (const item of ITEMS) {
 
   let msg = null, priority = "default";
   if (days >= item.limit) {
-    msg = `⛔ ${item.name}: limit ${item.limit} dní překročen (už ${Math.floor(days)} dní).`;
+    const over = Math.floor(days - item.limit);
+    msg = over < 1
+      ? `⛔ ${item.name}: limit ${item.limit} dní právě uplynul.`
+      : `⛔ ${item.name}: limit ${item.limit} dní překročen o ${over} ${dny(over)}.`;
     priority = "high";          // připomíná se každý den, dokud nevynulujete
   } else if (days >= warnAt && days < warnAt + 1) {
-    msg = `⚠ ${item.name}: ${Math.floor(days)} dní, blíží se limit ${item.limit} dní.`;
+    const left = Math.ceil(item.limit - days);
+    msg = `⚠ ${item.name}: do limitu zbývá cca ${left} ${dny(left)}.`;
   }
 
   if (msg) {
