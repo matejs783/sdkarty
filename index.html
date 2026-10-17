@@ -231,6 +231,7 @@
 
       <button class="reset-btn" onclick="resetCounter('${i.id}')">${i.btn}</button>
       <div class="since-date" id="${i.id}-since"></div>
+      <div class="since-date" id="${i.id}-until" style="margin-top:4px;"></div>
     </div>`).join('');
   }
 
@@ -273,6 +274,7 @@
     const sinceEl = document.getElementById(type + '-since');
     const item = BY_ID[type];
     const limit = item.limit;
+    const untilEl = document.getElementById(type + '-until');
 
     if(!start){
       daysEl.textContent = '–';
@@ -280,6 +282,7 @@
       statusEl.className = 'status-text idle';
       progressEl.style.width = '0%';
       sinceEl.textContent = '';
+      untilEl.textContent = '';
       return;
     }
 
@@ -289,6 +292,8 @@
 
     daysEl.textContent = fullDays;
     sinceEl.textContent = item.since + ': ' + formatDate(start);
+    const deadline = start + limit * 24 * 60 * 60 * 1000;
+    untilEl.textContent = (Date.now() < deadline ? 'Limit vyprší: ' : 'Limit vypršel: ') + formatDate(deadline);
 
     const ratio = Math.min(diffDays / limit, 1.3);
     progressEl.style.width = Math.min(ratio * 100, 100) + '%';
